@@ -8,7 +8,7 @@ struct lattice {
 	float epsilon;
 
 };
-__global__ void setup_kernel(curandStateMRG32k3a_t* state, int seed)//initialize the curands state for RNG
+__global__ void setup_kernel(curandStateMRG32k3a_t* state, unsigned long long seed)//initialize the curands state for RNG
 {
 	int id = threadIdx.x + blockIdx.x * blockDim.x;
 	/* Each thread gets same seed, a different sequence

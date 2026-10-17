@@ -60,7 +60,7 @@ __global__ void MC_update_even_neumann(double* phi, curandStateMRG32k3a_t* state
 	}
 
 	else {
-		if (expf(-s) > curand_uniform_double(&state[id])) {//metropolis algorithm for accepting the change
+		if (exp(-s) > curand_uniform_double(&state[id])) {//metropolis algorithm for accepting the change
 			phi[id] = phi_new;
 			accept[id]++;
 		}

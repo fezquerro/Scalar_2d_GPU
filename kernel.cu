@@ -38,6 +38,7 @@
 #define epsilonl 1.1 //delta for the metropolis algotithm
 #define W 80 // termf of correlation computed 
 #define pmeasure 4
+#define SEED 0 // fixed seed for reproducible runs, 0 to use time(NULL)
 int main()
 {
 	char nsave[2] = "1";//counter for saving different runs with the same parameters
@@ -45,15 +46,15 @@ int main()
 		struct lattice l = { 2 * co + dy,dx,dt, (2 * co + dy) * dx * dt,ml,epsilonl };//dimy,dimx,dimt,V,m,delta
 		struct lattice l2 = { l.y / 2,l.x,l.t,l.V / 2,l.m,l.epsilon }; // half lattice
 		printf("N %d Lt %d Lx %d Ly %d\n", N, l.t, l.x, l.y);// print parameters of the lattice
+		if (l.t % 2 || l.x % 2 || l.y % 2) { // the checkerboard decomposition needs even sizes in every direction
+			printf("Lt, Lx and Ly must be even\n");
+			return 1;
+		}
 		int nblocks, nthreads;
-		if (l.V > 256) { // Total volumen must be a multiple of 256 if not change nthreads
-			nthreads = 256;
-			nblocks = l.V / 256;
-		}
-		else {//if size of the lattice smaller than 256 just use 2 blocks in the GPU
-			nthreads = l.V / 2;
-			nblocks = 2;
-		}
+		nthreads = 256; // largest block size <= 256 that divides the half lattice, so no site is skipped
+		while (l2.V % nthreads != 0)
+			nthreads--;
+		nblocks = 2 * (l2.V / nthreads); // blocks for the full lattice, the MC kernels use nblocks / 2
 		printf("nblocks %d nthreads %d\n", nblocks, nthreads);
 		char bcond;
 		if (BC == 0) {printf("PERIODIC BOUNDARY CONDITIONS\n"); bcond = 'p';}
@@ -64,7 +65,9 @@ int main()
 
 		curandStateMRG32k3a_t* devStates;
 		cudaMalloc((void**)&devStates, l2.V * sizeof(curandStateMRG32k3a_t));
-		setup_kernel << <nblocks / 2, nthreads >> > (devStates, time(NULL));//setup the random number generator
+		unsigned long long seed = (SEED == 0) ? (unsigned long long)time(NULL) : SEED;
+		printf("Seed %llu\n", seed);
+		setup_kernel << <nblocks / 2, nthreads >> > (devStates, seed);//setup the random number generator
 
 
 		double* phi = (double*)malloc(l.V * sizeof(double)), * phid; cudaMalloc(&phid, l.V * sizeof(double));// define the variable to save the lattice in CPU and GPU
@@ -98,7 +101,7 @@ int main()
 #elif BC==ABC
 			MC_update_even_anti << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
 			MC_update_odd_anti << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
-#elif BC=DBC
+#elif BC==DBC
 			MC_update_even_dir << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
 			MC_update_odd_dir << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
 #elif BC==NBC
@@ -158,28 +161,35 @@ int main()
 			//sumlfd << <1, 1 >> > (sum, l);
 			if (i % block_size == 0) {
 				//eblock_average[i_block] = mean_lattice(sum,sumh, block_size, l,true); i_block++;
-				printf("%lf Time %d Left(min)%lf\n", (double)i / N, time(NULL) - t_n, (double)(time(NULL) - t_ini) * (N - i) / i / 60);
+				printf("%lf Time %d Left(min)%lf\n", (double)i / N, (int)(time(NULL) - t_n), (double)(time(NULL) - t_ini) * (N - i) / i / 60);
 				t_n = time(NULL);
 			}
 
 		}
 		t_fin = time(NULL);
 		printf("Time of the simulation %d\n", t_fin - t_ini);
+		cudaError_t err = cudaGetLastError();
+		if (err == cudaSuccess) err = cudaDeviceSynchronize();
+		if (err != cudaSuccess) { printf("CUDA error: %s\n", cudaGetErrorString(err)); return 1; }
 		//cudaMemcpy(phi, phid, l.V * sizeof(double), cudaMemcpyDeviceToHost); printlattice(phi);
 		
 
 		cudaMemcpy(en, end, N * sizeof(double), cudaMemcpyDeviceToHost);
-		printf("Accept metropolis ratio  "); double saccept = mean_lattice(accept, accepth, N * N_cor, l, true);
+		double saccept = mean_lattice(accept, accepth, N * N_cor, l, false);
+#if BC==DBC || BC==ZBC
+		saccept *= (double)l.y / (l.y - 1); // the sites at y=0 are fixed and never updated
+#endif
+		printf("Accept metropolis ratio  %.10lf\n", saccept);
 
-		double energy[2], energy2[2]; //mean_variance(eblock_average, N_block, energy,true);
-		printf("Energy value "); mean_variance(en, N, energy, true);
+		double ener[2]; //mean_variance(eblock_average, N_block, ener,true);
+		printf("Energy value "); mean_variance(en, N, ener, true);
 		double ener_analytical = energy_analytical(l.t, l.x, l.y, l.m, bcond); printf("Energy analytical %lf\n", ener_analytical);
-		printf("Sigma deviation %lf\n", (energy[0] - ener_analytical) / sqrt(energy[1] / (N - 1)));
+		printf("Sigma deviation %lf\n", (ener[0] - ener_analytical) / sqrt(ener[1] / (N - 1)));
 
-		double autoc[W]; autocorrelation(en, N, W, energy[0], energy[1], autoc);
+		double autoc[W]; autocorrelation(en, N, W, ener[0], ener[1], autoc);
 
 #if save==0
-		save_energy(energy[0], energy[1], N_term, N, N_cor, saccept, l,bcond,nsave);
+		save_energy(ener[0], ener[1], N_term, N, N_cor, saccept, l,bcond,nsave);
 		save_autocorrelation(autoc, W, N, N_cor, N_term, l,bcond,nsave);
 #endif
 

@@ -1,4 +1,4 @@
-# Monte Carlo SU(2) Massive Scalar field GPU Simulator (2+1)
+# Monte Carlo Massive Scalar field GPU Simulator (2+1)
 
 **A high-performance lattice simulation code for GPU-accelerated Monte Carlo simulation of a massive scalar field in 2+1 dimensions using CUDA.**
 
@@ -14,7 +14,7 @@ The analytical results that this code compare its results to are presented in th
 
 ## Features
 
-- **Efficient SU(2) updates**: metropolis, fully implemented in CUDA kernels
+- **Efficient updates**: checkerboard Metropolis, fully implemented in CUDA kernels
 - **GPU Acceleration**: High-performance CUDA implementation
 - **Flexible lattice sizes**: Support for different $N_t \times N_x \times N_y$ lattices and masses $m$
 - **Boundary conditions**: Periodic, Anti-periodic, Dirichlet, Neumann and Zaremba boundary conditions

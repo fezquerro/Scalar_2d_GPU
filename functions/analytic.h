@@ -5,7 +5,7 @@
 #define pi 3.14159265358979324
 
 double energy_analytical(const int Lt, const int Lx, const int Ly, double m, char bound) {
-	 double m2=m*m/4,a,s=0;
+	 double m2=m*m/4,a,s=0,res=NAN;
 	 double* st = (double*)malloc(Lt * sizeof(double)); double* sx = (double*)malloc(Lx * sizeof(double)); double* sy = (double*)malloc(Ly * sizeof(double));
 
 	for (int i = 0; i < Lt; i++) {//compute the eigenvalues of the temporal side
@@ -31,9 +31,9 @@ double energy_analytical(const int Lt, const int Lx, const int Ly, double m, cha
 			}
 		}
 		if (m!=0)
-		    return 0.5 - s / Lt / Lx / Ly;
+		    res = 0.5 - s / Lt / Lx / Ly;
 		else
-			return 0.5*(1-1.0/ Lt / Lx / Ly) - s / Lt / Lx / Ly;
+			res = 0.5*(1-1.0/ Lt / Lx / Ly) - s / Lt / Lx / Ly;
 	}
 	if (bound == 'd') { // Dirichlet boundary conditions
 		for (int i = 1; i < Ly; i++) { //compute eigenvalues y side
@@ -47,7 +47,7 @@ double energy_analytical(const int Lt, const int Lx, const int Ly, double m, cha
 				}
 			}
 		}
-		return 0.5 * (1 - 1.0 / Ly) - s / Lt / Lx / Ly;
+		res = 0.5 * (1 - 1.0 / Ly) - s / Lt / Lx / Ly;
 
 	}
 	if (bound == 'a') { // Anti-Periodic boundary conditions
@@ -62,7 +62,7 @@ double energy_analytical(const int Lt, const int Lx, const int Ly, double m, cha
 				}
 			}
 		}
-			return 0.5 - s / Lt / Lx / Ly;
+			res = 0.5 - s / Lt / Lx / Ly;
 	}
 	if (bound == 'n') { // Neumann boundary conditions
 		for (int i = 0; i < Ly; i++) {//compute eigenvalues y side
@@ -78,9 +78,9 @@ double energy_analytical(const int Lt, const int Lx, const int Ly, double m, cha
 			}
 		}
 		if (m != 0)
-			return 0.5 - s / Lt / Lx / Ly;
+			res = 0.5 - s / Lt / Lx / Ly;
 		else
-			return 0.5 * (1 - 1.0 / Lt / Lx / Ly) - s / Lt / Lx / Ly;
+			res = 0.5 * (1 - 1.0 / Lt / Lx / Ly) - s / Lt / Lx / Ly;
 
 	}
 	if (bound == 'z') { // Zaremba boundary conditions
@@ -95,9 +95,10 @@ double energy_analytical(const int Lt, const int Lx, const int Ly, double m, cha
 				}
 			}
 		}
-		return 0.5 * (1 - 1.0 / Ly) - s / Lt / Lx / Ly;
+		res = 0.5 * (1 - 1.0 / Ly) - s / Lt / Lx / Ly;
 
 	}
-
-
+	if (isnan(res)) printf("Unknown boundary condition '%c'\n", bound);
+	free(st); free(sx); free(sy);
+	return res;
 }

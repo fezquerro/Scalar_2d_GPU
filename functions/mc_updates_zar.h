@@ -28,7 +28,7 @@ __global__ void MC_update_even_zar(double* phi, curandStateMRG32k3a_t* state, in
 	tm = - l.y * l.x;//the negative derivative in t
 	if (pos_t == 0)
 		tm =  l.y * l.x * (l.t - 1);
-	double s;
+	double s = 0;
 	if (!(pos_y == 0 && par_aux == 0) && !(pos_y == l.y - 1 && par_aux == 1)) {//bulk sites
 		aux2 += phi[pos + yp] + phi[pos + ym];//Term with y
 		aux2 += phi[pos + xp] + phi[pos + xm];//Term with x
@@ -54,7 +54,7 @@ __global__ void MC_update_even_zar(double* phi, curandStateMRG32k3a_t* state, in
 		}
 
 		else {
-			if (expf(-s) > curand_uniform_double(&state[id])) {//metropolis algorithm for accepting the change
+			if (exp(-s) > curand_uniform_double(&state[id])) {//metropolis algorithm for accepting the change
 				phi[id] = phi_new;
 				accept[id]++;
 			}
@@ -93,7 +93,7 @@ __global__ void MC_update_odd_zar(double* phi, curandStateMRG32k3a_t* state, int
 	tm = - l.y * l.x;//the negative derivative in t
 	if (pos_t == 0)
 		tm =  l.y * l.x * (l.t - 1);
-	double s;
+	double s = 0;
 	if (!(pos_y == 0 && par_aux == 1) && !(pos_y == l.y - 1 && par_aux == 0)) {//bulk sites
 		aux2 += phi[id + yp] + phi[id + ym];//Term with y
 		aux2 += phi[id + xp] + phi[id + xm];//Term with x
