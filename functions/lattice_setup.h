@@ -19,9 +19,10 @@ __global__ void setup_kernel(curandStateMRG32k3a_t* state, unsigned long long se
 
 __global__ void rand_init2(double* phi, curandStateMRG32k3a_t* state, struct lattice l) {//initialize lattice with ranadom entries
 	int i = threadIdx.x + blockIdx.x * blockDim.x;
+	RNG_DECL(i, 0) //step 0 is reserved for the initial lattice
 
-	phi[i] = 2 * curand_uniform_double(&state[i]) - 1;
-	phi[i + l.V] = 2 * curand_uniform_double(&state[i]) - 1;
+	phi[i] = 2 * RNG_U1(i) - 1;
+	phi[i + l.V] = 2 * RNG_U2(i) - 1;
 	//phi[l] = 1;
 	//printf(" %d %lf %d %lf\n",l,phi[l], l + l.x * l.y * l.z * l.t,phi[l+ l.x * l.y * l.z * l.t]);
 
@@ -34,14 +35,15 @@ __global__ void rand_init2_dir(double* phi, curandStateMRG32k3a_t* state, struct
 	int pos_x = (id % (l.x * l.y)) /  l.y;
 	int pos_t = id / (l.x * l.y);
 	int par_aux = (pos_t + pos_x) % 2;
+	RNG_DECL(id, 0) //step 0 is reserved for the initial lattice
 	if (pos_y == 0 && par_aux == 0)
 		phi[id] = 0;
 	else
-		phi[id] = 2 * curand_uniform_double(&state[id]) - 1;
+		phi[id] = 2 * RNG_U1(id) - 1;
 	if (pos_y == 0 && par_aux == 1)
 		phi[id + l.V] = 0;
 	else
-		phi[id + l.V] = 2 * curand_uniform_double(&state[id]) - 1;
+		phi[id + l.V] = 2 * RNG_U2(id) - 1;
 	//phi[l] = 1;
 	//printf(" %d %lf %d %lf\n",l,phi[l], l + l.x * l.y * l.z * l.t,phi[l+ l.x * l.y * l.z * l.t]);
 

@@ -5,6 +5,14 @@
 #include <curand_kernel.h>
 #include <curand.h>
 #include <math.h>
+
+//define the flag for each random number generator
+#define MRG 0 //MRG32k3a, one state per site stored in memory
+#define PHILOX 1 //Philox4_32_10, counter based without stored state (faster)
+#define RNG PHILOX //select the random number generator
+
+#include "functions\rng.h" //Random number generators
+#include "functions\metropolis.h" //Metropolis accept test
 #include "functions\lattice_setup.h" // Functions for initializing the lattice
 #include "functions\mc_updates.h" //MC updates with periodic boundary conditions (PBC)
 #include "functions\mc_updates_anti.h" //MC updates with anti-periodic boundary conditions (ABC)
@@ -23,7 +31,7 @@
 #define NBC 3 //Neumann boundary conditions
 #define ZBC 4 //Zaremba boundary conditions
 
-#define BC PBC //select the boundary condition
+#define BC ZBC //select the boundary condition
 #define N 10000 // number of measures
 #define N_term 2000 //steps for thermalization
 #define N_block 5 //blocks that the
@@ -63,11 +71,18 @@ int main()
 		if (BC == 3) { printf("NEUMANN BOUNDARY CONDITIONS\n"); bcond = 'n'; }
 		if (BC == 4) { printf("ZAREMBA BOUNDARY CONDITIONS\n"); bcond = 'z'; }
 
-		curandStateMRG32k3a_t* devStates;
-		cudaMalloc((void**)&devStates, l2.V * sizeof(curandStateMRG32k3a_t));
 		unsigned long long seed = (SEED == 0) ? (unsigned long long)time(NULL) : SEED;
 		printf("Seed %llu\n", seed);
+		curandStateMRG32k3a_t* devStates = NULL; //only used by MRG
+		unsigned long long rng_step = 1; //counter of update kernels for PHILOX, step 0 is the initial lattice
+#if RNG==PHILOX
+		printf("RNG PHILOX\n");
+		cudaMemcpyToSymbol(c_seed, &seed, sizeof(seed));
+#else
+		printf("RNG MRG\n");
+		cudaMalloc((void**)&devStates, l2.V * sizeof(curandStateMRG32k3a_t));
 		setup_kernel << <nblocks / 2, nthreads >> > (devStates, seed);//setup the random number generator
+#endif
 
 
 		double* phi = (double*)malloc(l.V * sizeof(double)), * phid; cudaMalloc(&phid, l.V * sizeof(double));// define the variable to save the lattice in CPU and GPU
@@ -95,21 +110,21 @@ int main()
 		int t_ini, t_fin, t_n, block_size = N / N_block;
 		for (j = 0; j < N_term; j++) {//thermalize with the choosen BC
 #if BC==PBC
-			MC_update_even << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
-			MC_update_odd << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
+			MC_update_even << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
+			MC_update_odd << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
 
 #elif BC==ABC
-			MC_update_even_anti << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
-			MC_update_odd_anti << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
+			MC_update_even_anti << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
+			MC_update_odd_anti << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
 #elif BC==DBC
-			MC_update_even_dir << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
-			MC_update_odd_dir << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
+			MC_update_even_dir << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
+			MC_update_odd_dir << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
 #elif BC==NBC
-			MC_update_even_neumann << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
-			MC_update_odd_neumann << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
+			MC_update_even_neumann << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
+			MC_update_odd_neumann << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
 #elif BC==ZBC
-			MC_update_even_zar << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
-			MC_update_odd_zar << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
+			MC_update_even_zar << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
+			MC_update_odd_zar << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
 #endif
 
 		}
@@ -118,20 +133,20 @@ int main()
 		for (i = 1; i < N + 1; i++) {
 			for (j = 0; j < N_cor; j++) {//MC steps between measures
 #if BC==PBC
-				MC_update_even << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
-				MC_update_odd << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
+				MC_update_even << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
+				MC_update_odd << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
 #elif BC==ABC
-				MC_update_even_anti << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
-				MC_update_odd_anti << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
+				MC_update_even_anti << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
+				MC_update_odd_anti << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
 #elif BC==DBC
-				MC_update_even_dir << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
-				MC_update_odd_dir << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
+				MC_update_even_dir << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
+				MC_update_odd_dir << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
 #elif BC==NBC
-				MC_update_even_neumann << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
-				MC_update_odd_neumann << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
+				MC_update_even_neumann << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
+				MC_update_odd_neumann << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
 #elif BC==ZBC
-				MC_update_even_zar << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
-				MC_update_odd_zar << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2);
+				MC_update_even_zar << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
+				MC_update_odd_zar << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
 #endif
 			}
 #if BC==PBC

@@ -22,4 +22,4 @@ The analytical results that this code compare its results to are presented in th
   - Energy (first component of the energy-momentum tensor)
 - **Analytical results**: The code compares the compatibility of the simulation results with the analytical formulas
 - **Thermalization and autocorrelation analysis**
-- **Configurable random number generator** (with reproducible seeds, CUDA-compatible)
+- **Configurable random number generator** (with reproducible seeds, CUDA-compatible): MRG32k3a (one stored state per site) or Philox4_32_10 (counter based, no stored state, faster), selected with the `RNG` flag in `kernel.cu`

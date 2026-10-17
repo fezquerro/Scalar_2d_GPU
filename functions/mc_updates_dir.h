@@ -1,13 +1,14 @@
 
 
-__global__ void MC_update_even_dir(double* phi, curandStateMRG32k3a_t* state, int* accept, const struct lattice l) {//update even sites of the lattice
+__global__ void MC_update_even_dir(double* phi, curandStateMRG32k3a_t* state, int* accept, const struct lattice l, unsigned long long step) {//update even sites of the lattice
 	int id = blockDim.x * blockIdx.x + threadIdx.x;// define the position in the lattice
+	RNG_DECL(id, step) //random numbers of this site for this update
 	int pos_y = id % l.y;
 	int pos_x = (id % (l.x * l.y)) / l.y;
 	int pos_t = id / (l.x * l.y);
 	int par_aux = (pos_t + pos_x) % 2;
 	int pos = id + l.V;
-	double phi_new = phi[id] + (2 * curand_uniform_double(&state[id]) - 1) * l.epsilon;//generate the new value
+	double phi_new = phi[id] + (2 * RNG_U1(id) - 1) * l.epsilon;//generate the new value
 	double aux2 = 0; int yp, ym, xp, xm, tp, tm;
 
 	yp = par_aux; //the positive derivative in z
@@ -38,7 +39,7 @@ __global__ void MC_update_even_dir(double* phi, curandStateMRG32k3a_t* state, in
 		}
 
 		else {
-			if (exp(-s) > curand_uniform_double(&state[id])) {//metropolis algorithm for accepting the change,if not using double for the random number it affects
+			if (metropolis_accept(s, RNG_U2(id))) {//metropolis algorithm for accepting the change,if not using double for the random number it affects
 				phi[id] = phi_new;
 				accept[id]++;
 			}
@@ -46,15 +47,16 @@ __global__ void MC_update_even_dir(double* phi, curandStateMRG32k3a_t* state, in
 	}
 }
 
-__global__ void MC_update_odd_dir(double* phi, curandStateMRG32k3a_t* state, int* accept, const struct lattice l) {//update odd sites of the lattice
+__global__ void MC_update_odd_dir(double* phi, curandStateMRG32k3a_t* state, int* accept, const struct lattice l, unsigned long long step) {//update odd sites of the lattice
 
 	int id = blockDim.x * blockIdx.x + threadIdx.x;// define the position in the lattice
+	RNG_DECL(id, step) //random numbers of this site for this update
 	int pos_y = id %  l.y;
 	int pos_x = (id % (l.x * l.y )) /  l.y;
 	int pos_t = id / (l.x * l.y);
 	int par_aux = (pos_t + pos_x) % 2;
 	int pos = id + l.V;
-	double phi_new = phi[pos] + (2 * curand_uniform_double(&state[id]) - 1) * l.epsilon;
+	double phi_new = phi[pos] + (2 * RNG_U1(id) - 1) * l.epsilon;
 	double aux2 = 0; int  yp, ym, xp, xm, tp, tm;
 
 	yp = 1 - par_aux; //the positive derivative in z
@@ -87,7 +89,7 @@ __global__ void MC_update_odd_dir(double* phi, curandStateMRG32k3a_t* state, int
 			accept[pos]++;
 		}
 
-		else if (exp(-s) > curand_uniform_double(&state[id])) {//metropolis algorithm for accepting the change, if not using double for the random number it affects
+		else if (metropolis_accept(s, RNG_U2(id))) {//metropolis algorithm for accepting the change, if not using double for the random number it affects
 			phi[pos] = phi_new;
 			accept[pos]++;
 		}
