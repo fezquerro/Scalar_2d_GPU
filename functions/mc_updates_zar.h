@@ -7,8 +7,6 @@ __global__ void MC_update_even_zar(double* phi, curandStateMRG32k3a_t* state, in
 	int pos_t = id / (l.x * l.y);
 	int par_aux = (pos_t + pos_x) % 2;
 	int pos = id + l.V;
-	double phi_new = phi[id] + (2 * RNG_U1(id) - 1) * l.epsilon;//generate the new value
-	//double phi_new = phi[id] + 1;
 	double aux2 = 0; int yp, ym, xp, xm, tp, tm;
 
 	yp = par_aux; //the positive derivative in y
@@ -29,19 +27,19 @@ __global__ void MC_update_even_zar(double* phi, curandStateMRG32k3a_t* state, in
 	tm = - l.y * l.x;//the negative derivative in t
 	if (pos_t == 0)
 		tm =  l.y * l.x * (l.t - 1);
-	double s = 0;
+	double kappa = 0;
 	if (!(pos_y == 0 && par_aux == 0) && !(pos_y == l.y - 1 && par_aux == 1)) {//bulk sites
 		aux2 += phi[pos + yp] + phi[pos + ym];//Term with y
 		aux2 += phi[pos + xp] + phi[pos + xm];//Term with x
 		aux2 += phi[pos + tp] + phi[pos + tm];//Term with t
-		s = 0.5 * (l.m * l.m + 6) * (phi_new * phi_new - phi[id] * phi[id]) - aux2 * (phi_new - phi[id]);//obtain the delta of the action
+		kappa = l.m * l.m + 6;//coefficient of phi^2 in the local action
 	}
 	else {
 		if (pos_y == l.y - 1 && par_aux == 1) {//At the right boundary points (y=l.y) apply the modified action of NBC
 			aux2 +=  phi[pos + ym];//Term with y
 			aux2 += phi[pos + xp] + phi[pos + xm];//Term with x
 			aux2 += phi[pos + tp] + phi[pos + tm];//Term with t
-			 s = 0.5 * (l.m * l.m + 5) * (phi_new * phi_new - phi[id] * phi[id]) - aux2 * (phi_new - phi[id]);//obtain the delta of the action
+			 kappa = l.m * l.m + 5;//coefficient of phi^2 in the local action
 			//printf("Even f %d %d %d %d %d %d %d %d %d\n", pos_y, pos_x, pos_t, yp, ym, xp, xm, tp, tm);
 		}
 	}
@@ -49,17 +47,7 @@ __global__ void MC_update_even_zar(double* phi, curandStateMRG32k3a_t* state, in
 	
 
 	if (!(pos_y == 0 && par_aux == 0)) {//Do not update the boundary points at the left (y=0)
-		if (s < 0) {//if the delta of the action is negative it accepts the change
-			phi[id] = phi_new;
-			accept[id]++;
-		}
-
-		else {
-			if (metropolis_accept(s, RNG_U2(id))) {//metropolis algorithm for accepting the change
-				phi[id] = phi_new;
-				accept[id]++;
-			}
-		}
+		site_update(&phi[id], &accept[id], aux2, kappa, l.epsilon, RNG_U1(id), RNG_U2(id));//update the site with the selected algorithm
 	}
 }
 
@@ -72,7 +60,6 @@ __global__ void MC_update_odd_zar(double* phi, curandStateMRG32k3a_t* state, int
 	int pos_t = id / (l.x * l.y);
 	int par_aux = (pos_t + pos_x) % 2;
 	int pos = id + l.V;
-	double phi_new = phi[pos] + (2 * RNG_U1(id) - 1) * l.epsilon;
 	double aux2 = 0; int  yp, ym, xp, xm, tp, tm;
 
 	yp = 1 - par_aux; //the positive derivative in z
@@ -95,19 +82,19 @@ __global__ void MC_update_odd_zar(double* phi, curandStateMRG32k3a_t* state, int
 	tm = - l.y * l.x;//the negative derivative in t
 	if (pos_t == 0)
 		tm =  l.y * l.x * (l.t - 1);
-	double s = 0;
+	double kappa = 0;
 	if (!(pos_y == 0 && par_aux == 1) && !(pos_y == l.y - 1 && par_aux == 0)) {//bulk sites
 		aux2 += phi[id + yp] + phi[id + ym];//Term with y
 		aux2 += phi[id + xp] + phi[id + xm];//Term with x
 		aux2 += phi[id + tp] + phi[id + tm];//Term with t
-		s = 0.5 * (l.m * l.m + 6) * (phi_new * phi_new - phi[pos] * phi[pos]) - aux2 * (phi_new - phi[pos]);//obtain the delta of the action
+		kappa = l.m * l.m + 6;//coefficient of phi^2 in the local action
 	}
 	else {
 		if (pos_y == l.y - 1 && par_aux == 0) {//At the right boundary points (y=l.y) apply the modified action of NBC
 			aux2 += phi[id + ym];//Term with y
 			aux2 += phi[id + xp] + phi[id + xm];//Term with x
 			aux2 += phi[id + tp] + phi[id + tm];//Term with t
-			s = 0.5 * (l.m * l.m + 5) * (phi_new * phi_new - phi[pos] * phi[pos]) - aux2 * (phi_new - phi[pos]);//obtain the delta of the action
+			kappa = l.m * l.m + 5;//coefficient of phi^2 in the local action
 			//printf("Odd f %d %d %d %d %d %d %d %d %d\n", pos_y, pos_x, pos_t, yp, ym, xp, xm, tp, tm);
 		}
 	}
@@ -116,15 +103,7 @@ __global__ void MC_update_odd_zar(double* phi, curandStateMRG32k3a_t* state, int
 	//The action is a^2/2*((2d+m^2a^2)*phi^2-\sum (phi(x+a)+phi(x-a))*phi) but we use the adimensional phi=a/phi, M=am
 	if (!(pos_y == 0 && par_aux == 1)) {//Do not update the boundary points at the left (y=0)
 
-		if (s < 0) {//if the delta of the action is negative it accepts the change
-			phi[pos] = phi_new;
-			accept[pos]++;
-		}
-
-		else if (metropolis_accept(s, RNG_U2(id))) {//metropolis algorithm for accepting the change
-			phi[pos] = phi_new;
-			accept[pos]++;
-		}
+		site_update(&phi[pos], &accept[pos], aux2, kappa, l.epsilon, RNG_U1(id), RNG_U2(id));//update the site with the selected algorithm
 	}
 }
 

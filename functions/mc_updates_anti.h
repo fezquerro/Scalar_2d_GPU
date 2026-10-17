@@ -7,8 +7,6 @@ __global__ void MC_update_even_anti(double* phi, curandStateMRG32k3a_t* state, i
 	int pos_t = id / (l.x * l.y);
 	int par_aux = (pos_t + pos_x) % 2;
 	int pos = id + l.V;
-	double phi_new = phi[id] + (2 * RNG_U1(id) - 1) * l.epsilon;//generate the new value
-	//double phi_new = phi[id] + 1;
 	double aux2 = 0; int yp, ym, xp, xm, tp, tm;
 
 	yp = par_aux; //the positive derivative in y
@@ -50,19 +48,9 @@ __global__ void MC_update_even_anti(double* phi, curandStateMRG32k3a_t* state, i
 		}
 	}
 //	printf("Even %d %d %d %d %d %d %d %d %d\n", pos_y, pos_x, pos_t, yp, ym, xp, xm, tp, tm);
-	double s = 0.5 * (l.m * l.m + 6) * (phi_new * phi_new - phi[id] * phi[id]) - aux2 * (phi_new - phi[id]);//obtain the delta of the action
+	double kappa = l.m * l.m + 6;//coefficient of phi^2 in the local action
 	//The action is a^2/2*((2d+m^2a^2)*phi^2-\sum (phi(x+a)+phi(x-a))*phi) but we use the adimensional phi=a/phi, M=am
-	if (s < 0) {//if the delta of the action is negative it accepts the change
-		phi[id] = phi_new;
-		accept[id]++;
-	}
-
-	else {
-		if (metropolis_accept(s, RNG_U2(id))) {//metropolis algorithm for accepting the change
-			phi[id] = phi_new;
-			accept[id]++;
-		}
-	}
+	site_update(&phi[id], &accept[id], aux2, kappa, l.epsilon, RNG_U1(id), RNG_U2(id));//update the site with the selected algorithm
 }
 
 __global__ void MC_update_odd_anti(double* phi, curandStateMRG32k3a_t* state, int* accept, struct lattice l, unsigned long long step) {//update odd sites of the lattice
@@ -74,7 +62,6 @@ __global__ void MC_update_odd_anti(double* phi, curandStateMRG32k3a_t* state, in
 	int pos_t = id / (l.x * l.y);
 	int par_aux = (pos_t + pos_x) % 2;
 	int pos = id + l.V;
-	double phi_new = phi[pos] + (2 * RNG_U1(id) - 1) * l.epsilon;
 	double aux2 = 0; int  yp, ym, xp, xm, tp, tm;
 
 	yp = 1 - par_aux; //the positive derivative in z
@@ -118,17 +105,9 @@ __global__ void MC_update_odd_anti(double* phi, curandStateMRG32k3a_t* state, in
 		}
 	}
 	//printf("Odd %d %d %d %d %d %d %d %d %d\n", pos_y, pos_x, pos_t, yp, ym, xp, xm, tp, tm);
-	double s = 0.5 * (l.m * l.m + 6) * (phi_new * phi_new - phi[pos] * phi[pos]) - aux2 * (phi_new - phi[pos]);//obtain the delta of the action
+	double kappa = l.m * l.m + 6;//coefficient of phi^2 in the local action
 	//The action is a^2/2*((2d+m^2a^2)*phi^2-\sum (phi(x+a)+phi(x-a))*phi) but we use the adimensional phi=a/phi, M=am
-	if (s < 0) {//if the delta of the action is negative it accepts the change
-		phi[pos] = phi_new;
-		accept[pos]++;
-	}
-
-	else if (metropolis_accept(s, RNG_U2(id))) {//metropolis algorithm for accepting the change
-		phi[pos] = phi_new;
-		accept[pos]++;
-	}
+	site_update(&phi[pos], &accept[pos], aux2, kappa, l.epsilon, RNG_U1(id), RNG_U2(id));//update the site with the selected algorithm
 }
 
 

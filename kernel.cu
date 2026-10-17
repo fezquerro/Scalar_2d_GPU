@@ -11,8 +11,14 @@
 #define PHILOX 1 //Philox4_32_10, counter based without stored state (faster)
 #define RNG PHILOX //select the random number generator
 
+//define the flag for each update algorithm
+#define METROPOLIS 0 //Metropolis with proposals of size epsilonl
+#define HEATBATH 1 //heat-bath, new value drawn from the exact gaussian distribution of the site (decorrelates faster, use a smaller N_cor)
+#define ALGO METROPOLIS //select the update algorithm
+
 #include "functions\rng.h" //Random number generators
 #include "functions\metropolis.h" //Metropolis accept test
+#include "functions\site_update.h" //Update of one site with the selected algorithm
 #include "functions\lattice_setup.h" // Functions for initializing the lattice
 #include "functions\mc_updates.h" //MC updates with periodic boundary conditions (PBC)
 #include "functions\mc_updates_anti.h" //MC updates with anti-periodic boundary conditions (ABC)
@@ -70,6 +76,8 @@ int main()
 		if (BC == 2) { printf("DIRICHLET BOUNDARY CONDITIONS\n"); bcond = 'd'; }
 		if (BC == 3) { printf("NEUMANN BOUNDARY CONDITIONS\n"); bcond = 'n'; }
 		if (BC == 4) { printf("ZAREMBA BOUNDARY CONDITIONS\n"); bcond = 'z'; }
+		if (ALGO == METROPOLIS) printf("METROPOLIS UPDATES epsilon %.2f\n", l.epsilon);
+		if (ALGO == HEATBATH) printf("HEAT-BATH UPDATES\n");
 
 		unsigned long long seed = (SEED == 0) ? (unsigned long long)time(NULL) : SEED;
 		printf("Seed %llu\n", seed);

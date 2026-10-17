@@ -15,6 +15,7 @@ The analytical results that this code compare its results to are presented in th
 ## Features
 
 - **Efficient updates**: checkerboard Metropolis, fully implemented in CUDA kernels
+- **Update algorithms**: Metropolis or heat-bath (exact gaussian draw of each site, about 3 times shorter autocorrelation per sweep), selected with the `ALGO` flag in `kernel.cu`
 - **GPU Acceleration**: High-performance CUDA implementation
 - **Flexible lattice sizes**: Support for different $N_t \times N_x \times N_y$ lattices and masses $m$
 - **Boundary conditions**: Periodic, Anti-periodic, Dirichlet, Neumann and Zaremba boundary conditions
