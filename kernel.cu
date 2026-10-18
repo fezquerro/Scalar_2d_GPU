@@ -9,12 +9,12 @@
 //define the flag for each random number generator
 #define MRG 0 //MRG32k3a, one state per site stored in memory
 #define PHILOX 1 //Philox4_32_10, counter based without stored state (faster)
-#define RNG PHILOX //select the random number generator
+#define RNG MRG //select the random number generator
 
 //define the flag for each update algorithm
 #define METROPOLIS 0 //Metropolis with proposals of size epsilonl
 #define HEATBATH 1 //heat-bath, new value drawn from the exact gaussian distribution of the site (decorrelates faster, use a smaller N_cor)
-#define ALGO METROPOLIS //select the update algorithm
+#define ALGO HEATBATH //select the update algorithm
 
 #include "functions\rng.h" //Random number generators
 #include "functions\metropolis.h" //Metropolis accept test
@@ -37,17 +37,17 @@
 #define NBC 3 //Neumann boundary conditions
 #define ZBC 4 //Zaremba boundary conditions
 
-#define BC ZBC //select the boundary condition
+#define BC PBC //select the boundary condition
 #define N 10000 // number of measures
 #define N_term 2000 //steps for thermalization
 #define N_block 5 //blocks that the
-#define N_cor 10 // steps between measures 
+#define N_cor 2 // steps between measures 
 #define save 1 // 0 for saving the simulation results
 
-#define dy 6 //size of y direction
-#define dx 6 //size of x direction
-#define dt 6 //size of t direction
-#define ml 0// mass of the scalar field
+#define dy 8 //size of y direction
+#define dx 16 //size of x direction
+#define dt 16 //size of t direction
+#define ml 0.1// mass of the scalar field
 
 #define epsilonl 1.1 //delta for the metropolis algotithm
 #define W 80 // termf of correlation computed 
@@ -106,15 +106,8 @@ int main()
 		int* accept, * accepth = (int*)malloc(l.V * sizeof(int));
 		cudaMalloc(&accept, l.V * sizeof(int)); cudaMemset(accept, 0, l.V * sizeof(int));
 
-		double* sum, * sumh;
-		cudaMalloc(&sum, l.V * sizeof(double)); cudaMemset(sum, 0, l.V * sizeof(double));
-		sumh = (double*)malloc(l.V * sizeof(double));
-
-
-		//double* end, * en = (double*)malloc(N * sizeof(double)); cudaMalloc(&end, N * sizeof(double)); cudaMemset(end, 0, N * sizeof(double));
-		double* end, * en = (double*)malloc(N * l.y * sizeof(double)); cudaMalloc(&end, N * l.y * sizeof(double)); cudaMemset(end, 0, N * l.y * sizeof(double));
-		double* endaux; cudaMalloc(&endaux, l.V / 2 * sizeof(double)); cudaMemset(endaux, 0, l.V / 2 * sizeof(double));
-		int i, j, i_block = 0;
+		double* end, * en = (double*)malloc(N * sizeof(double)); cudaMalloc(&end, N * sizeof(double)); cudaMemset(end, 0, N * sizeof(double));//energy of each measurement in GPU and CPU
+		int i, j;
 		int t_ini, t_fin, t_n, block_size = N / N_block;
 		for (j = 0; j < N_term; j++) {//thermalize with the choosen BC
 #if BC==PBC
@@ -157,33 +150,14 @@ int main()
 				MC_update_odd_zar << < nblocks / 2, nthreads >> > (phid, devStates, accept, l2, rng_step++);
 #endif
 			}
-#if BC==PBC
-			energy << <nblocks, nthreads >> > (phid, sum, l2);
+#if BC==PBC || BC==DBC //energy of the configuration, averaged over the lattice in the same kernel
+			energy << <nblocks, nthreads, nthreads * sizeof(double) >> > (phid, end + i - 1, l2, 1.0 / l.V);
 #elif BC==ABC
-			energy_anti << <nblocks, nthreads >> > (phid, sum, l2);
-#elif BC==DBC
-			energy << <nblocks, nthreads >> > (phid, sum, l2);
-#elif BC==NBC
-			energy_neu << <nblocks, nthreads >> > (phid, sum, l2);
-#elif BC==ZBC
-			energy_neu << <nblocks, nthreads >> > (phid, sum, l2);
+			energy_anti << <nblocks, nthreads, nthreads * sizeof(double) >> > (phid, end + i - 1, l2, 1.0 / l.V);
+#elif BC==NBC || BC==ZBC
+			energy_neu << <nblocks, nthreads, nthreads * sizeof(double) >> > (phid, end + i - 1, l2, 1.0 / l.V);
 #endif
-
-
-#if (dx==96 && dt==96) //compute with parallel reduction for lattice 96 x 96 x y 
-			mean_lattice_par96(sum, endaux, end + i - 1, l.V, l.y);
-	
-#elif (dx==64 && dt==64) //compute with parallel reduction for lattice 64 x 64 x y 
-			mean_lattice_par64(sum, endaux, end + i - 1, l.V, l.y);
-
-#elif (dx==32 && dt==32) //compute with parallel reduction for lattice 32 x 32 x y 
-			mean_lattice_par32(sum, endaux, end + i - 1, l.V, l.y);
-#else
-			mean_lattice_small(sum, end + i - 1, l.V); //compute with just one thread, VERY SLOW
-#endif
-			//sumlfd << <1, 1 >> > (sum, l);
 			if (i % block_size == 0) {
-				//eblock_average[i_block] = mean_lattice(sum,sumh, block_size, l,true); i_block++;
 				printf("%lf Time %d Left(min)%lf\n", (double)i / N, (int)(time(NULL) - t_n), (double)(time(NULL) - t_ini) * (N - i) / i / 60);
 				t_n = time(NULL);
 			}
@@ -216,7 +190,7 @@ int main()
 		save_autocorrelation(autoc, W, N, N_cor, N_term, l,bcond,nsave);
 #endif
 
-		free(phi); free(sumh); free(accepth); cudaFree(phid); cudaFree(accept); cudaFree(sum); cudaFree(devStates);
-		free(en); cudaFree(endaux); cudaFree(end);
+		free(phi); free(accepth); cudaFree(phid); cudaFree(accept); cudaFree(devStates);
+		free(en); cudaFree(end);
 	}
 }

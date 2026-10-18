@@ -64,20 +64,3 @@ void printlattice(double* phi, struct lattice l)//print the lattice values
 	}
 
 }
-
-__global__ void sumd(double* phi, struct lattice l)
-{
-	double sum = 0;
-	for (int t = 0; t < l.t; t++)
-	{
-		for (int x = 0; x < l.x; x++)
-		{
-			for (int y = 0; y < l.y; y++)
-					sum += phi[ y + l.y * x + l.x * l.y  * t];
-
-
-		}
-
-	}
-	printf("Result sum 2 %.16lf\n", sum / l.V);
-}
